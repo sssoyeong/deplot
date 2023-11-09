@@ -27,3 +27,20 @@ print(f'elapsed time: {elapsed_time:.4f} secs')
 result = processor.decode(predictions[0], skip_special_tokens=True)
 result2 = result.replace('<0x0A>', '\n')
 print(result2)
+
+
+url = "https://raw.githubusercontent.com/vis-nlp/ChartQA/main/ChartQA%20Dataset/val/png/two_col_43.png"
+image = Image.open(requests.get(url, stream=True).raw)
+image.show()
+
+inputs = processor(images=image, text="Generate underlying data table of the figure below:", return_tensors="pt")
+start_time = time.time()
+predictions = model.generate(**inputs, max_new_tokens=512)
+elapsed_time = time.time()-start_time
+
+print(processor.decode(predictions[0], skip_special_tokens=True))
+print(f'elapsed time: {elapsed_time:.4f} secs')
+
+result = processor.decode(predictions[0], skip_special_tokens=True)
+result2 = result.replace('<0x0A>', '\n')
+print(result2)
