@@ -1,21 +1,28 @@
-# sslerror 발생 시 requests==2.27.1로 맞추고 아래 두 줄 추가하면 됨
-import os
+import os       # sslerror 발생 시 requests==2.27.1로 맞추고 line 2, 3 추가하면 됨
 os.environ['CURL_CA_BUNDLE']=''
 
 import time
-
-from transformers import Pix2StructProcessor, Pix2StructForConditionalGeneration
+import pickle
 import requests
+
+import pandas as pd
 from PIL import Image
 
+from transformers import Pix2StructProcessor, Pix2StructForConditionalGeneration
+import plotly.express as px
+
+# set variable
+filename = 'two_col_102644.png'
+
+# load pre-trained model
 processor = Pix2StructProcessor.from_pretrained('google/deplot')
 model = Pix2StructForConditionalGeneration.from_pretrained('google/deplot')
 
-url = "https://raw.githubusercontent.com/vis-nlp/ChartQA/main/ChartQA%20Dataset/val/png/5090.png"
-# https://github.com/vis-nlp/ChartQA/blob/4878877860d6c51dd95df9376cd9baa776e81068/ChartQA%20Dataset/val/png/5090.png
-image = Image.open(requests.get(url, stream=True).raw)
+# load image
+image = Image.open(filename)
 image.show()
 
+# predict
 inputs = processor(images=image, text="Generate underlying data table of the figure below:", return_tensors="pt")
 start_time = time.time()
 predictions = model.generate(**inputs, max_new_tokens=512)
@@ -28,19 +35,29 @@ result = processor.decode(predictions[0], skip_special_tokens=True)
 result2 = result.replace('<0x0A>', '\n')
 print(result2)
 
+# save variables
+with open(f'result_{filename[:-4]}.pkl', 'wb') as f:
+    pickle.dump(result, f)
+    pickle.dump(result2, f)
 
-url = "https://raw.githubusercontent.com/vis-nlp/ChartQA/main/ChartQA%20Dataset/val/png/two_col_43.png"
-image = Image.open(requests.get(url, stream=True).raw)
-image.show()
+# load variables
+with open('result_two_col_102644.pkl', 'rb') as f:
+    result1 = pickle.load(f)
+    result2 = pickle.load(f)
 
-inputs = processor(images=image, text="Generate underlying data table of the figure below:", return_tensors="pt")
-start_time = time.time()
-predictions = model.generate(**inputs, max_new_tokens=512)
-elapsed_time = time.time()-start_time
+# convert string result to dataframe
+x_list, y_list = [], []
+result_list = result1.split(' <0x0A> ')
+for r in result_list:
+    x, y = r.split(' | ')
+    x_list.append(x)
+    y_list.append(y)
 
-print(processor.decode(predictions[0], skip_special_tokens=True))
-print(f'elapsed time: {elapsed_time:.4f} secs')
+x_label = x_list.pop(0)
+y_label = y_list.pop(0)
+df = pd.DataFrame({x_label: x_list, y_label: y_list})
 
-result = processor.decode(predictions[0], skip_special_tokens=True)
-result2 = result.replace('<0x0A>', '\n')
-print(result2)
+# plotly
+fig = px.line(df, x=x_label, y=y_label, markers=True)
+fig.update_xaxes(rangeslider_visible=True)
+fig.show()
