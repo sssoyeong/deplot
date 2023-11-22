@@ -12,7 +12,8 @@ from transformers import Pix2StructProcessor, Pix2StructForConditionalGeneration
 import plotly.express as px
 
 # set variable
-filename = 'two_col_102644.png'
+filename = 'multi_col_606.png'
+# filename = 'two_col_102644.png'
 
 # load pre-trained model
 processor = Pix2StructProcessor.from_pretrained('google/deplot')
@@ -41,7 +42,7 @@ with open(f'result_{filename[:-4]}.pkl', 'wb') as f:
     pickle.dump(result2, f)
 
 # load variables
-with open('result_two_col_102644.pkl', 'rb') as f:
+with open(f'result_{filename[:-4]}.pkl', 'rb') as f:
     result1 = pickle.load(f)
     result2 = pickle.load(f)
 
@@ -55,7 +56,10 @@ for r in result_list:
 
 x_label = x_list.pop(0)
 y_label = y_list.pop(0)
+x_list.reverse()
+y_list.reverse()
 df = pd.DataFrame({x_label: x_list, y_label: y_list})
+df = df.astype({y_label: 'float'})
 
 # plotly
 fig = px.line(df, x=x_label, y=y_label, markers=True)
