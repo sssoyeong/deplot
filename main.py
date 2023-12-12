@@ -5,14 +5,18 @@ import re
 import time
 import pickle
 
+import numpy as np
 import pandas as pd
 from PIL import Image
 
 from transformers import Pix2StructProcessor, Pix2StructForConditionalGeneration
 import plotly.express as px
+import plotly.graph_objects as go
+
 
 # set variable
-filename = 'multi_col_606.png'
+filename = 'multi_col_21130.png'    # line 4개
+# filename = 'multi_col_606.png'
 # filename = 'two_col_102644.png'
 
 # load pre-trained model
@@ -54,26 +58,53 @@ num_row = len(result_list)
 col_row = result_list[0].split(' | ')
 df = pd.DataFrame()
 
-for i in reversed(range(1, num_col)):
+for i in reversed(range(1, num_row)):
     r = result_list[i]
-    temp = pd.DataFrame(r.split(' | ')).T
-    df = pd.concat([df, temp], axis=0)
+    # temp = pd.DataFrame(r.split(' | ')).T
+    temp = r.split(' | ')
+    temp_sub = [temp[0]] + [re.sub(r'[^ .0-9]', '', x) for x in temp[1:]]
+    temp_sub = pd.DataFrame(temp_sub).T
+    df = pd.concat([df, temp_sub], axis=0)
 
 df.columns = col_row
 df = df.reset_index(drop=True)
+df[col_row[1:]] = df[col_row[1:]].apply(pd.to_numeric)
+idx_original = df[col_row[0]]
 
-# 값에 unit이 같이 들어있는지 체크
-a = df.iat[0, 1]
-num_a = re.sub(r"[^.0-9]", "", a)
-new_a = re.sub(r"[.0-9]", "", a)
-print(f'{num_a}, {new_a}')
+# check unit
+check_ex = result_list[1].split(' | ')[1]
+unit = re.sub(r'[ .0-9]', '', check_ex)
+exist_unit = False if unit == '' else True
+
+# make traces between nodes
+idx_trace = np.linspace(0, df.shape[0]-1, (df.shape[0]-1) * 1000 + 1)
+list_trace = np.reshape(idx_trace, (len(idx_trace), 1))
+
+for c in range(1, len(col_row)):
+    temp = np.interp(idx_trace, df.index, df[col_row[c]])
+    temp = np.reshape(temp, (len(temp), 1))
+    list_trace = np.concatenate((list_trace, temp), axis=1)
+
+df_trace = pd.DataFrame(list_trace)
+
+from matplotlib import pyplot as plt
+def test_plot():
+    plt.plot(df_trace, marker='.')
+    plt.show()
+test_plot()
 
 
 
-for c in col_row[1:]:
-    df = df.astype({c: 'float'})
-
-# plotly
-fig = px.line(df, x=x_label, y=y_label, markers=True)
-fig.update_xaxes(rangeslider_visible=True)
+# plotly scatter with go
+fig = go.Figure()
+for col in df.columns[1:]:
+    fig.add_trace(
+        go.Scatter(x=df[col_row[0]], y=df[col], name=col)
+    )
+fig.update_layout(
+    xaxis_title=col_row[0],
+    # yaxis_title="value",
+)
+if df.shape[1] == 2:
+    fig.update_layout(yaxis_title=col_row[1])
 fig.show()
