@@ -88,24 +88,39 @@ for c in range(1, len(col_row)):
 df_trace = pd.DataFrame(list_trace, columns=col_row)
 
 # plotly scatter with go
+slct_cm = px.colors.qualitative.Vivid
 fig = go.Figure()
-for col in df.columns[1:]:
+
+for c in range(len(df.columns[1:])):
+    col = df.columns[1:][c]
     fig.add_trace(
-        go.Scatter(x=df.index, y=df[col], name=col)
-        # hovering False 처리하기... 는 굳이 안 해도 될 듯?
+        go.Scatter(x=df.index, y=df[col], name=col, marker_color=slct_cm[c])
     )
-for col in df_trace.columns[1:]:
+
+for c in range(len(df.columns[1:])):
+    col = df.columns[1:][c]
     fig.add_trace(
-        fig.add_trace(
-            go.Scatter(x=df_trace[col_row[0]], y=df_trace[col], name=col, opacity=0.1)
-        )
+        go.Scatter(x=df_trace[col_row[0]], y=df_trace[col], name=col, opacity=0, showlegend=False,  marker_color=slct_cm[c])
     )
+    print(col)
 
 fig.update_layout(
     xaxis_title=col_row[0],
-    # yaxis_title="value",
+    xaxis = dict(
+        tickmode = 'array',
+        tickvals = df.index,
+        ticktext = idx_original.values
+    )
 )
 if df.shape[1] == 2:
     fig.update_layout(yaxis_title=col_row[1])
 fig.show()
- 
+
+
+
+# try with px
+import plotly.express as px
+fig = px.line(df, x=df.columns[0], y=df.columns[1:], markers=True, color_discrete_sequence=px.colors.qualitative.Vivid)
+fig.update_traces(mode="markers+lines")
+fig.show()
+
