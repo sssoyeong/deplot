@@ -85,22 +85,22 @@ for c in range(1, len(col_row)):
     temp = np.reshape(temp, (len(temp), 1))
     list_trace = np.concatenate((list_trace, temp), axis=1)
 
-df_trace = pd.DataFrame(list_trace)
-
-from matplotlib import pyplot as plt
-def test_plot():
-    plt.plot(df_trace, marker='.')
-    plt.show()
-test_plot()
-
-
+df_trace = pd.DataFrame(list_trace, columns=col_row)
 
 # plotly scatter with go
 fig = go.Figure()
 for col in df.columns[1:]:
     fig.add_trace(
-        go.Scatter(x=df[col_row[0]], y=df[col], name=col)
+        go.Scatter(x=df.index, y=df[col], name=col)
+        # hovering False 처리하기... 는 굳이 안 해도 될 듯?
     )
+for col in df_trace.columns[1:]:
+    fig.add_trace(
+        fig.add_trace(
+            go.Scatter(x=df_trace[col_row[0]], y=df_trace[col], name=col, opacity=0.1)
+        )
+    )
+
 fig.update_layout(
     xaxis_title=col_row[0],
     # yaxis_title="value",
@@ -108,3 +108,4 @@ fig.update_layout(
 if df.shape[1] == 2:
     fig.update_layout(yaxis_title=col_row[1])
 fig.show()
+ 
