@@ -60,7 +60,6 @@ df = pd.DataFrame()
 
 for i in reversed(range(1, num_row)):
     r = result_list[i]
-    # temp = pd.DataFrame(r.split(' | ')).T
     temp = r.split(' | ')
     temp_sub = [temp[0]] + [re.sub(r'[^ .0-9]', '', x) for x in temp[1:]]
     temp_sub = pd.DataFrame(temp_sub).T
@@ -69,12 +68,10 @@ for i in reversed(range(1, num_row)):
 df.columns = col_row
 df = df.reset_index(drop=True)
 df[col_row[1:]] = df[col_row[1:]].apply(pd.to_numeric)
-idx_original = df[col_row[0]]
 
 # check unit
 check_ex = result_list[1].split(' | ')[1]
 unit = re.sub(r'[ .0-9]', '', check_ex)
-exist_unit = False if unit == '' else True
 
 # make traces between nodes
 idx_trace = np.linspace(0, df.shape[0]-1, (df.shape[0]-1) * 1000 + 1)
@@ -88,39 +85,38 @@ for c in range(1, len(col_row)):
 df_trace = pd.DataFrame(list_trace, columns=col_row)
 
 # plotly scatter with go
-slct_cm = px.colors.qualitative.Vivid
+cm = px.colors.qualitative.Vivid
 fig = go.Figure()
 
 for c in range(len(df.columns[1:])):
     col = df.columns[1:][c]
     fig.add_trace(
-        go.Scatter(x=df.index, y=df[col], name=col, marker_color=slct_cm[c])
+        go.Scatter(x=df.index, y=df[col], name=col, marker_color=cm[c])
     )
 
-for c in range(len(df.columns[1:])):
-    col = df.columns[1:][c]
+for c in range(len(df_trace.columns[1:])):
+    col = df_trace.columns[1:][c]
     fig.add_trace(
-        go.Scatter(x=df_trace[col_row[0]], y=df_trace[col], name=col, opacity=0, showlegend=False,  marker_color=slct_cm[c])
+        go.Scatter(x=df_trace[col_row[0]], y=df_trace[col], name=col, opacity=0, showlegend=False,  marker_color=cm[c])
     )
     print(col)
 
+fig.update_traces(hovertemplate='%{y}')
 fig.update_layout(
-    xaxis_title=col_row[0],
     xaxis = dict(
+        title = col_row[0],
         tickmode = 'array',
         tickvals = df.index,
-        ticktext = idx_original.values
+        ticktext = df[col_row[0]].values
     )
 )
+if unit != '':
+    fig.update_layout(
+        yaxis = dict(
+            ticksuffix=unit
+        )
+    )
 if df.shape[1] == 2:
     fig.update_layout(yaxis_title=col_row[1])
-fig.show()
-
-
-
-# try with px
-import plotly.express as px
-fig = px.line(df, x=df.columns[0], y=df.columns[1:], markers=True, color_discrete_sequence=px.colors.qualitative.Vivid)
-fig.update_traces(mode="markers+lines")
 fig.show()
 

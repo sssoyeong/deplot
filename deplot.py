@@ -1,16 +1,18 @@
 #####################################################
-# DePlot Web Service v0.2
+# DePlot Web Service v0.3
 #####################################################
 #
 # (history)
 #
-# for v0.3: More test, support various types of ploting ...
+# for v0.4: More test, ...
 #
+# DePlot Web Service v0.3 by Soyeong Park 23.12.13
+#  - multi-variable plot, add function viewing values on edges
 # DePlot Web Service v0.2 by Jeongcheol Lee 23.11.28
 #  - add basic except handling
 # DePlot Web Service v0.1 by Jeongcheol Lee 23.11.27
 #  - real-time linkage between dataframe and chart (modificable)
-# DePlot Inference Code by Soyoung Park
+# DePlot Inference Code by Soyeong Park
 #
 #####################################################
 
@@ -114,21 +116,87 @@ run_flag = True
 ##############################################################
 
 import os
+import re
 import time
+import numpy as np 
 import pandas as pd
 from PIL import Image
 from transformers import Pix2StructProcessor, Pix2StructForConditionalGeneration
 import plotly.express as px
+import plotly.graph_objects as go
 
 @st.cache_data
-def convert_df(df):
+def export_df(df):
    return df.to_csv(index=False).encode('utf-8')
 
-def getfig(df):
-    x_label, y_label = df.columns[0], df.columns[1]
-    fig = px.line(df, x=x_label, y=y_label, markers=True)
-    fig.update_xaxes(rangeslider_visible=True)
+def get_fig(df, df_trace, unit):
+    col_row = df.columns.values.tolist()
+    cm = px.colors.qualitative.Vivid
+    fig = go.Figure()
+    for c in range(len(df.columns[1:])):        # plot df
+        col = df.columns[1:][c]
+        fig.add_trace(
+            go.Scatter(x=df.index, y=df[col], name=col, marker_color=cm[c])
+        )
+    for c in range(len(df_trace.columns[1:])):  # plot df_trace
+        col = df_trace.columns[1:][c]
+        fig.add_trace(
+            go.Scatter(x=df_trace[col_row[0]], y=df_trace[col], name=col, opacity=0, showlegend=False,  marker_color=cm[c])
+        )
+    fig.update_traces(hovertemplate='%{y}')
+    fig.update_layout(
+        xaxis = dict(
+            title = col_row[0],
+            tickmode = 'array',
+            tickvals = df.index,
+            ticktext = df[col_row[0]].values
+        )
+    )
+    if unit != '':
+        fig.update_layout(
+            yaxis = dict(
+                ticksuffix=unit
+            )
+        )
+    if df.shape[1] == 2:
+        fig.update_layout(yaxis_title=col_row[1])
     return fig
+
+def convert_str2df(result):
+    # convert string result to dataframe
+    x_list, y_list = [], []
+    result_list = result.split(' <0x0A> ')
+    num_col = result_list[0].count('|') + 1
+    num_row = len(result_list)
+    col_row = result_list[0].split(' | ')
+    df = pd.DataFrame()
+    for i in reversed(range(1, num_row)):
+        r = result_list[i]
+        temp = r.split(' | ')
+        temp_sub = [temp[0]] + [re.sub(r'[^ .0-9]', '', x) for x in temp[1:]]
+        temp_sub = pd.DataFrame(temp_sub).T
+        df = pd.concat([df, temp_sub], axis=0)
+    df.columns = col_row
+    df = df.reset_index(drop=True)
+    df[col_row[1:]] = df[col_row[1:]].apply(pd.to_numeric)
+    return df
+
+def check_unit(result):
+    result_list = result.split(' <0x0A> ')
+    check_ex = result_list[1].split(' | ')[1]
+    unit = re.sub(r'[ .0-9]', '', check_ex)
+    return unit
+
+def make_trace(df):
+    col_row = df.columns.values.tolist()
+    idx_trace = np.linspace(0, df.shape[0]-1, (df.shape[0]-1) * 1000 + 1)
+    list_trace = np.reshape(idx_trace, (len(idx_trace), 1))
+    for c in range(1, len(col_row)):
+        temp = np.interp(idx_trace, df.index, df[col_row[c]])
+        temp = np.reshape(temp, (len(temp), 1))
+        list_trace = np.concatenate((list_trace, temp), axis=1)
+    df_trace = pd.DataFrame(list_trace, columns=col_row)
+    return df_trace
 
 def deplot_inference(uploaded_file, device='cpu'):
     image = Image.open(uploaded_file)
@@ -148,33 +216,19 @@ def deplot_inference(uploaded_file, device='cpu'):
     elapsed_time = time.time()-start_time
 
     print(processor.decode(predictions[0], skip_special_tokens=True))
-    print(f'elapsed time: {elapsed_time:.4f} secs')
+    print(f'*DONE* elapsed time: {elapsed_time:.4f} secs')
 
     result = processor.decode(predictions[0], skip_special_tokens=True)
-    print(result)
+    unit = check_unit(result)
     try:
-        # convert string result to dataframe
-        x_list, y_list = [], []
-        result_list = result.split(' <0x0A> ')
-        num_col = result_list[0].count('|') + 1
-        num_row = len(result_list)
-        for r in result_list:
-            x, y = r.split(' | ')
-            x_list.append(x)
-            y_list.append(y)
-        x_label = x_list.pop(0)
-        y_label = y_list.pop(0)
-        x_list.reverse()
-        y_list.reverse()
-        df = pd.DataFrame({x_label: x_list, y_label: y_list})
-        df = df.astype({y_label: 'float'})
+        df = convert_str2df(result)
     except:
         st.markdown("[ERR] failed to parsing the plot..")
         st.markdown("**Parsed Result by DePlot Model**")
         st.write(result)
         st.markdown('**Converted Table (modificable)**')
         edited_df = st.data_editor(df, num_rows="dynamic", on_change=save_edits)
-        csv = convert_df(edited_df)
+        csv = export_df(edited_df)
         st.download_button(
                "Press to Download as CSV",
                csv,
@@ -184,11 +238,8 @@ def deplot_inference(uploaded_file, device='cpu'):
             )
         if st.button("Make a Plot"):
             with st.spinner("Loading..."):
-                st.plotly_chart(getfig(edited_df))
-    # plotly
-    #fig = px.line(df, x=x_label, y=y_label, markers=True)
-    #fig.update_xaxes(rangeslider_visible=True)
-    return df
+                st.plotly_chart(get_fig(edited_df))
+    return df, unit
 
 def save_edits():
     st.session_state.count+=1
@@ -236,19 +287,21 @@ if run_flag == True:
             st.image(st.session_state.loaded)    
             #
             if current_filename != st.session_state.prev_filename:
-                df = deplot_inference(st.session_state.loaded, device='gpu')
-                fig = getfig(df)
+                df, unit = deplot_inference(st.session_state.loaded, device='cpu')
+                df_trace = make_trace(df)
+                fig = get_fig(df, df_trace, unit)
                 st.session_state.prev_filename = current_filename
                 st.session_state.fig = fig
                 st.session_state.df = df
             st.markdown('**Converted Table (modificable)**')
             df = st.session_state.df
             edited_df = st.data_editor(df, num_rows="dynamic", on_change=save_edits)
+            edited_df_trace = make_trace(edited_df)
             #st.markdown("**count**")
             #st.write(st.session_state.count)
             st.markdown('**DePlotted Chart**')
-            st.plotly_chart(getfig(edited_df))
-            csv = convert_df(edited_df)
+            st.plotly_chart(get_fig(edited_df, edited_df_trace, ''))
+            csv = export_df(edited_df)
             st.download_button(
                "Press to Download as CSV",
                csv,
